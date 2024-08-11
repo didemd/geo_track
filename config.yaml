@@ -1,0 +1,3 @@
+input_directory: "data"
+# output_file: logs/"gdf_heads.txt"
+log_file_csv: "logs/get_csv_heads.log"
