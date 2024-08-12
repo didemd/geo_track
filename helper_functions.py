@@ -78,16 +78,14 @@ def compute_and_visualize_spatial_utilization(gdf, animal_id, time_start, time_e
     datetime_format = '%d/%m/%Y %H:%M:%S'
     gdf['DateTime'] = pd.to_datetime(gdf['Date'] + ' ' + gdf['Time'], format=datetime_format, errors='coerce')
     print(gdf['Time'])
-    #gdf['Date'] = pd.to_datetime(gdf['Date'], errors='coerce').dt.strftime('%d/%m/%Y')
-    #gdf['DateTime'] = pd.to_datetime(gdf['Date'] + ' ' + gdf['Time'])
-    # print(gdf['DateTime'])
+    print(gdf['DateTime'])
 
-    # gdf_filtered = gdf[(gdf['Individual_Name'] == animal_id) & 
-    #                    (gdf['DateTime'] >= time_start) &
-    #                    (gdf['DateTime'] <= time_end)]
+    gdf_filtered = gdf[(gdf['TAG'] == animal_id) & 
+                        (gdf['DateTime'] >= time_start) &
+                        (gdf['DateTime'] <= time_end)]
     
-    # if gdf_filtered.empty:
-    #      raise ValueError("No data available for the specified animal and timeframe.")
+    if gdf_filtered.empty:
+          raise ValueError("No data available for the specified animal and timeframe.")
 
     # # Convex Hull
     # points = np.array(list(zip(gdf_filtered.geometry.x, gdf_filtered.geometry.y)))
