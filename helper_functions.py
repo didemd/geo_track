@@ -7,11 +7,15 @@ import numpy as np
 from scipy.stats import gaussian_kde
 import geopandas as gpd
 import matplotlib.pyplot as plt
+import matplotlib
 import contextily as ctx
 from shapely.geometry import MultiPolygon, Polygon
 from scipy.spatial import ConvexHull
 from sklearn.neighbors import KernelDensity
 from shapely.ops import unary_union
+
+matplotlib.use('Agg')  # Use a non-interactive backend to generate images without requiring a GUI
+
 
 def get_csv_heads(directory):
     csv_files = glob.glob(os.path.join(directory, "*.csv"))
@@ -87,10 +91,26 @@ def compute_and_visualize_spatial_utilization(gdf, animal_id, time_start, time_e
     if gdf_filtered.empty:
           raise ValueError("No data available for the specified animal and timeframe.")
 
-    # # Convex Hull
-    # points = np.array(list(zip(gdf_filtered.geometry.x, gdf_filtered.geometry.y)))
-    # hull = ConvexHull(points)
-    # convex_hull_polygon = Polygon([points[vertex] for vertex in hull.vertices])
+    # Convex Hull
+    points = np.array(list(zip(gdf_filtered.geometry.x, gdf_filtered.geometry.y)))
+    hull = ConvexHull(points)
+    convex_hull_polygon = Polygon([points[vertex] for vertex in hull.vertices])
+
+
+
+    # # Plotting
+    fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+    gdf_filtered.plot(ax=ax, color='blue', markersize=10)
+    gpd.GeoSeries([convex_hull_polygon]).plot(ax=ax, color='none', edgecolor='red', linewidth=2)
+
+
+    ctx.add_basemap(ax, crs=gdf_filtered.crs.to_string())
+    ax.set_title(f"Spatial Utilization for {animal_id} from {time_start} to {time_end}")
+    plt.tight_layout()
+
+    # Save the plot to a file
+    plt.savefig('output/plot_spatial_utilization.png')  # Specify your desired output path and file format
+    plt.close(fig)  # Close the plot explicitly after saving to free up system resources
     
     # # Kernel Density Estimation
     # bandwidth = 0.01  # bandwidth affects smoothness, adjust based on your dataset
