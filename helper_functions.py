@@ -69,15 +69,17 @@ def compute_and_visualize_spatial_utilization(gdf, animal_id, time_start, time_e
     print("Converted Start Date:", time_start)
     print("Converted End Date:", time_end)
     print(gdf['Time'])
+
     # Correct format for 24-hour time without AM/PM
     gdf['Time'] = gdf['Time'].apply(lambda x: x if is_time_format_correct(x) else pd.to_datetime(x, format='%I:%M:%S %p', errors='coerce').strftime('%H:%M:%S'))
     # Check and convert Date if not in the correct format
     gdf['Date'] = gdf['Date'].apply(lambda x: x if is_date_format_correct(x) else pd.to_datetime(x, errors='coerce').strftime('%d/%m/%Y'))
     # Merge Time and Date into a new DateTime column
-    gdf['DateTime'] = pd.to_datetime(gdf['Date'] + ' ' + gdf['Time'])
+    datetime_format = '%d/%m/%Y %H:%M:%S'
+    gdf['DateTime'] = pd.to_datetime(gdf['Date'] + ' ' + gdf['Time'], format=datetime_format, errors='coerce')
     print(gdf['Time'])
-    gdf['Date'] = pd.to_datetime(gdf['Date'], errors='coerce').dt.strftime('%d/%m/%Y')
-    # gdf['DateTime'] = pd.to_datetime(gdf['Date'] + ' ' + gdf['Time'])
+    #gdf['Date'] = pd.to_datetime(gdf['Date'], errors='coerce').dt.strftime('%d/%m/%Y')
+    #gdf['DateTime'] = pd.to_datetime(gdf['Date'] + ' ' + gdf['Time'])
     # print(gdf['DateTime'])
 
     # gdf_filtered = gdf[(gdf['Individual_Name'] == animal_id) & 
