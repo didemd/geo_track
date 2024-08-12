@@ -13,8 +13,15 @@ from shapely.geometry import MultiPolygon, Polygon
 from scipy.spatial import ConvexHull
 from sklearn.neighbors import KernelDensity
 from shapely.ops import unary_union
+import seaborn as sns
+import numpy as np
+import geopandas as gpd
+import matplotlib.pyplot as plt
+from scipy.stats import gaussian_kde
+from shapely.geometry import Polygon, MultiPolygon
+import contextily as ctx
 
-matplotlib.use('Agg')  # Use a non-interactive backend to generate images without requiring a GUI
+matplotlib.use('Agg')  
 
 
 def get_csv_heads(directory):
@@ -96,48 +103,50 @@ def compute_and_visualize_spatial_utilization(gdf, animal_id, time_start, time_e
     hull = ConvexHull(points)
     convex_hull_polygon = Polygon([points[vertex] for vertex in hull.vertices])
 
+    # Calculate circumference (perimeter) of the convex hull
+    circumference = convex_hull_polygon.length
 
+    # KDE calculation
+    values = np.vstack((points[:, 0], points[:, 1]))  # Organizing x and y coordinates
+    kde = gaussian_kde(values, bw_method=0.7)
 
-    # # Plotting
-    fig, ax = plt.subplots(1, 1, figsize=(12, 8))
-    gdf_filtered.plot(ax=ax, color='blue', markersize=10)
-    gpd.GeoSeries([convex_hull_polygon]).plot(ax=ax, color='none', edgecolor='red', linewidth=2)
+    # Create grid for KDE evaluation
+    xmin, ymin = points.min(axis=0)
+    xmax, ymax = points.max(axis=0)
+    xx, yy = np.mgrid[xmin:xmax:200j, ymin:ymax:200j]
+    positions = np.vstack([xx.ravel(), yy.ravel()])
+    kde_values = kde(positions).reshape(xx.shape)
 
+    # Calculate density thresholds
+    level_95 = np.percentile(kde_values, 5)
+    level_50 = np.percentile(kde_values, 50)
 
-    #ctx.add_basemap(ax, crs=gdf_filtered.crs.to_string())
-    #ax.set_title(f"Spatial Utilization for {animal_id} from {time_start} to {time_end}")
-    #plt.tight_layout()
+    # Area calculations
+    area_95 = np.sum(kde_values > level_95) * (xmax - xmin) * (ymax - ymin) / kde_values.size
+    area_50 = np.sum(kde_values > level_50) * (xmax - xmin) * (ymax - ymin) / kde_values.size
 
-    # Save the plot to a file
-    #plt.savefig('output/plot_spatial_utilization.png')  # Specify your desired output path and file format
-    #plt.close(fig)  # Close the plot explicitly after saving to free up system resources
-    
-    # # Kernel Density Estimation
-    bandwidth = 0.01  # bandwidth affects smoothness, adjust based on your dataset
-    kde = KernelDensity(kernel='gaussian', bandwidth=bandwidth).fit(points)
-    scores = kde.score_samples(points)
-    threshold_95 = np.percentile(scores, 5)
-    threshold_50 = np.percentile(scores, 50)
-    high_density_area_95 = MultiPolygon([Polygon(points[scores > threshold_95])])
-    high_density_area_50 = MultiPolygon([Polygon(points[scores > threshold_50])])
-    
-    # # Plotting
-    fig, ax = plt.subplots(1, 1, figsize=(12, 8))
-    gdf_filtered.plot(ax=ax, color='blue', markersize=10)
-    gpd.GeoSeries([convex_hull_polygon]).plot(ax=ax, color='none', edgecolor='red', linewidth=2)
-    gpd.GeoSeries(high_density_area_95).plot(ax=ax, color='red', alpha=0.5)
-    gpd.GeoSeries(high_density_area_50).plot(ax=ax, color='blue', alpha=0.8)
-    
-    ctx.add_basemap(ax, crs=gdf_filtered.crs.to_string())
+    # Set up plot
+    fig, ax = plt.subplots(figsize=(12, 8))
+    ax.contourf(xx, yy, kde_values, levels=[level_95, level_50, kde_values.max()], colors=['orange', 'red', 'darkred'], alpha=0.5)
+    gdf_filtered.plot(ax=ax, color='blue', markersize=10, label='Filtered Points')
+    gpd.GeoSeries([convex_hull_polygon]).plot(ax=ax, color='none', edgecolor='green', linewidth=2, label='Convex Hull')
+
+    # Adjust zoom and add basemap
+    buffer = 0.1
+    ax.set_xlim([xmin - buffer * (xmax - xmin), xmax + buffer * (xmax - xmin)])
+    ax.set_ylim([ymin - buffer * (ymax - ymin), ymax + buffer * (ymax - ymin)])
+    ctx.add_basemap(ax, crs=gdf_filtered.crs.to_string(), zoom=12)
+
+    # Title and legend with area and circumference
     ax.set_title(f"Spatial Utilization for {animal_id} from {time_start} to {time_end}")
+    ax.set_axis_off()
+    ax.legend(handles=[
+        plt.Line2D([0], [0], color='orange', lw=4, label=f'50% Density: {area_50:.2f} sq. units'),
+        plt.Line2D([0], [0], color='red', lw=4, label=f'95% Density: {area_95:.2f} sq. units'),
+        plt.Line2D([0], [0], color='green', lw=4, label=f'Circumference: {circumference:.2f} units')
+    ])
+
+    # Save and close
     plt.tight_layout()
-    plt.savefig('output/plot_spatial_utilization.png')  # Specify your desired output path and file format
-    plt.close(fig)  # Close the plot explicitly after saving to free up system resources
-    
-
-    # # Compute metrics
-    # area = convex_hull_polygon.area
-    # perimeter = convex_hull_polygon.length
-    # area_to_perimeter_ratio = area / perimeter if perimeter else 0
-
-    # return {'Area': area, 'Perimeter': perimeter, 'Area_to_Perimeter_Ratio': area_to_perimeter_ratio}
+    plt.savefig('output/plot_spatial_utilization_heatmap_with_map.png', dpi=300)
+    plt.close(fig)
