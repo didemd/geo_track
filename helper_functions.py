@@ -104,34 +104,36 @@ def compute_and_visualize_spatial_utilization(gdf, animal_id, time_start, time_e
     gpd.GeoSeries([convex_hull_polygon]).plot(ax=ax, color='none', edgecolor='red', linewidth=2)
 
 
+    #ctx.add_basemap(ax, crs=gdf_filtered.crs.to_string())
+    #ax.set_title(f"Spatial Utilization for {animal_id} from {time_start} to {time_end}")
+    #plt.tight_layout()
+
+    # Save the plot to a file
+    #plt.savefig('output/plot_spatial_utilization.png')  # Specify your desired output path and file format
+    #plt.close(fig)  # Close the plot explicitly after saving to free up system resources
+    
+    # # Kernel Density Estimation
+    bandwidth = 0.01  # bandwidth affects smoothness, adjust based on your dataset
+    kde = KernelDensity(kernel='gaussian', bandwidth=bandwidth).fit(points)
+    scores = kde.score_samples(points)
+    threshold_95 = np.percentile(scores, 5)
+    threshold_50 = np.percentile(scores, 50)
+    high_density_area_95 = MultiPolygon([Polygon(points[scores > threshold_95])])
+    high_density_area_50 = MultiPolygon([Polygon(points[scores > threshold_50])])
+    
+    # # Plotting
+    fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+    gdf_filtered.plot(ax=ax, color='blue', markersize=10)
+    gpd.GeoSeries([convex_hull_polygon]).plot(ax=ax, color='none', edgecolor='red', linewidth=2)
+    gpd.GeoSeries(high_density_area_95).plot(ax=ax, color='red', alpha=0.5)
+    gpd.GeoSeries(high_density_area_50).plot(ax=ax, color='blue', alpha=0.8)
+    
     ctx.add_basemap(ax, crs=gdf_filtered.crs.to_string())
     ax.set_title(f"Spatial Utilization for {animal_id} from {time_start} to {time_end}")
     plt.tight_layout()
-
-    # Save the plot to a file
     plt.savefig('output/plot_spatial_utilization.png')  # Specify your desired output path and file format
     plt.close(fig)  # Close the plot explicitly after saving to free up system resources
     
-    # # Kernel Density Estimation
-    # bandwidth = 0.01  # bandwidth affects smoothness, adjust based on your dataset
-    # kde = KernelDensity(kernel='gaussian', bandwidth=bandwidth).fit(points)
-    # scores = kde.score_samples(points)
-    # threshold_95 = np.percentile(scores, 5)
-    # threshold_50 = np.percentile(scores, 50)
-    # high_density_area_95 = MultiPolygon([Polygon(points[scores > threshold_95])])
-    # high_density_area_50 = MultiPolygon([Polygon(points[scores > threshold_50])])
-    
-    # # Plotting
-    # fig, ax = plt.subplots(1, 1, figsize=(12, 8))
-    # gdf_filtered.plot(ax=ax, color='blue', markersize=10)
-    # gpd.GeoSeries([convex_hull_polygon]).plot(ax=ax, color='none', edgecolor='red', linewidth=2)
-    # gpd.GeoSeries(high_density_area_95).plot(ax=ax, color='red', alpha=0.5)
-    # gpd.GeoSeries(high_density_area_50).plot(ax=ax, color='red', alpha=0.8)
-    
-    # ctx.add_basemap(ax, crs=gdf_filtered.crs.to_string())
-    # ax.set_title(f"Spatial Utilization for {animal_id} from {time_start} to {time_end}")
-    # plt.tight_layout()
-    # plt.show()
 
     # # Compute metrics
     # area = convex_hull_polygon.area
