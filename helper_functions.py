@@ -15,6 +15,7 @@ from sklearn.neighbors import KernelDensity
 from shapely.ops import unary_union
 import seaborn as sns
 import numpy as np
+import pickle
 
 matplotlib.use('Agg')  
 
@@ -189,19 +190,24 @@ def calculate_spatial_utilization(gdf_filtered,bw_method):
         'level_50': level_50
     }
 
-def plot_spatial_utilization(gdf_filtered, spatial_metrics, animal_id, time_start, time_end):
+def plot_spatial_utilization(gdf_filtered, spatial_metrics, animal_id, time_start, time_end, output_file):
     """
     Plot spatial utilization with a heatmap and convex hull.
-    
+
     Args:
-    gdf_filtered (GeoDataFrame): Filtered GeoDataFrame containing spatial data.
-    spatial_metrics (dict): Dictionary containing spatial metrics including the convex hull and KDE values.
-    animal_id (str): Animal ID.
-    time_start (datetime): Start time of the dataset.
-    time_end (datetime): End time of the dataset.
+        gdf_filtered (GeoDataFrame): Filtered GeoDataFrame containing spatial data.
+        spatial_metrics (dict): Dictionary containing spatial metrics including the convex hull and KDE values.
+        animal_id (str): Animal ID.
+        time_start (str): Start time of the dataset.
+        time_end (str): End time of the dataset.
+        output_file (str): Path where the plot image will be saved.
     """
     fig, ax = plt.subplots(figsize=(12, 8))
-    ax.contourf(spatial_metrics['xx'], spatial_metrics['yy'], spatial_metrics['kde_values'], levels=[spatial_metrics['level_95'], spatial_metrics['level_50'], spatial_metrics['kde_values'].max()], colors=['orange', 'red', 'darkred'], alpha=0.5)
+    ax.contourf(
+        spatial_metrics['xx'], spatial_metrics['yy'], spatial_metrics['kde_values'],
+        levels=[spatial_metrics['level_95'], spatial_metrics['level_50'], spatial_metrics['kde_values'].max()],
+        colors=['orange', 'red', 'darkred'], alpha=0.5
+    )
     gdf_filtered.plot(ax=ax, color='blue', markersize=10, label='Filtered Points')
     gpd.GeoSeries([spatial_metrics['convex_hull_polygon']]).plot(ax=ax, color='none', edgecolor='green', linewidth=2, label='Convex Hull')
 
@@ -215,11 +221,11 @@ def plot_spatial_utilization(gdf_filtered, spatial_metrics, animal_id, time_star
     ax.set_title(f"Spatial Utilization for {animal_id} from {time_start} to {time_end}")
     ax.set_axis_off()
     ax.legend(handles=[
-        plt.Line2D([0], [0], color='orange', lw=4, label=f'50% Density: {spatial_metrics['area_50']:.2f} sq. units'),
-        plt.Line2D([0], [0], color='red', lw=4, label=f'95% Density: {spatial_metrics['area_95']:.2f} sq. units'),
-        plt.Line2D([0], [0], color='green', lw=4, label=f'Circumference: {spatial_metrics['circumference']:.2f} units')
+        plt.Line2D([0], [0], color='orange', lw=4, label=f'50% Density: {spatial_metrics["area_50"]:.2f} sq. units'),
+        plt.Line2D([0], [0], color='red', lw=4, label=f'95% Density: {spatial_metrics["area_95"]:.2f} sq. units'),
+        plt.Line2D([0], [0], color='green', lw=4, label=f'Circumference: {spatial_metrics["circumference"]:.2f} units')
     ])
 
     plt.tight_layout()
-    plt.savefig('output/plot_spatial_utilization_heatmap_with_map.png', dpi=300)
+    plt.savefig(output_file, dpi=300)  # Save to the specified output file
     plt.close(fig)
