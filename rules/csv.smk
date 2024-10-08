@@ -72,5 +72,5 @@ rule plot_spatial_metrics:
             'TAG221',
             '2022-11-01 00:00:32',
             '2023-10-31 22:00:32',
-            output.plot  # Pass the output plot path
+            output.plot  
         )
