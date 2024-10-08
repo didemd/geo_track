@@ -58,7 +58,7 @@ rule process_gdf:
 rule plot_spatial_metrics:
     input:
         gdf = "intermediate/formatted.gdf",
-        spatial_metrics = "output/spatial_metrics.pkl"  # Updated to .pkl
+        spatial_metrics = "output/spatial_metrics.pkl"  
     output:
         plot = "output/plot_spatial_utilization_heatmap_with_map.png"
     run:

@@ -227,5 +227,5 @@ def plot_spatial_utilization(gdf_filtered, spatial_metrics, animal_id, time_star
     ])
 
     plt.tight_layout()
-    plt.savefig(output_file, dpi=300)  
+    plt.savefig(output_file, dpi=300)  #
     plt.close(fig)
