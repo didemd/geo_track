@@ -1,4 +1,3 @@
-
 import geopandas as gpd
 import pandas as pd
 import re
@@ -16,11 +15,11 @@ from ipyleaflet import ScaleControl
 import cartoee
 import cartoee.plotting as cplot
 import cartopy.crs as ccrs
-
-pyproj.datadir.set_data_dir('Users/didemdost/opt/anaconda3/envs/snakemake-env/lib/python3.12/site-packages/pyproj/proj_dir/share/proj') ## set the pyproj data directory
 import os
-os.environ['PROJ_LIB'] = '/Users/didemdost/opt/anaconda3/envs/snakemake-env/lib/python3.12/site-packages/pyproj/proj_dir/share/proj'
 
+# Set pyproj data directory (adjust path as necessary)
+pyproj.datadir.set_data_dir('Users/didemdost/opt/anaconda3/envs/snakemake-env/lib/python3.12/site-packages/pyproj/proj_dir/share/proj')
+os.environ['PROJ_LIB'] = '/Users/didemdost/opt/anaconda3/envs/snakemake-env/lib/python3.12/site-packages/pyproj/proj_dir/share/proj'
 
 def standardize_headers(file_path):
     """
@@ -171,11 +170,10 @@ def convert_csv_to_geodataframe(df):
     print("Starting conversion to GeoDataFrame...")
     
     try:
-        print("beginning")
+        print("Converting longitude and latitude to geometry...")
         geometry = gpd.points_from_xy(df['LONGITUDE'], df['LATITUDE'])
-        print(geometry)
-        print("geometry calculated")
-        gdf = gpd.GeoDataFrame(df, geometry=geometry, crs='EPSG:3857')
+        print("Geometry calculated.")
+        gdf = gpd.GeoDataFrame(df, geometry=geometry, crs='EPSG:4326')  # Changed CRS to EPSG:4326 for geospatial consistency
         print("GeoDataFrame successfully created:")
         print(gdf.head())
         return gdf
@@ -198,7 +196,6 @@ def write_gdf_to_csv(gdf, csv_output_file):
     except Exception as e:
         print(f"Failed to write GeoDataFrame to CSV: {e}")
 
-
 def gdf_to_gpkg(gdf, output_file):
     """
     Exports a GeoDataFrame to a GeoPackage file.
@@ -213,9 +210,6 @@ def gdf_to_gpkg(gdf, output_file):
         print("GeoDataFrame successfully written to GeoPackage.")
     except Exception as e:
         print(f"Failed to write GeoDataFrame to GeoPackage: {e}")
-
-import pandas as pd
-import geopandas as gpd
 
 def filter_gdf(gdf, animal_id, time_start, time_end=None, exact=False):
     """
@@ -357,7 +351,7 @@ def spatial_kernel_density(gdf, cutoff_list):
                         if not new_shape.is_valid:
                             continue  # Skip invalid geometries
                     level_polygons.append({"level": level, "geometry": new_shape})
-    
+
     if not level_polygons:
         print("No contour polygons were generated.")
         return None
@@ -365,214 +359,207 @@ def spatial_kernel_density(gdf, cutoff_list):
     contour_gdf = gpd.GeoDataFrame(level_polygons, geometry="geometry", crs=gdf.crs)
     return contour_gdf
 
-def plot_spatial_utilization_method1(gdf_filtered, spatial_metrics, animal_id, time_start, time_end=None, output_dir="/Users/didemdost/Desktop/geo_track/output"):
-    """
-    Plot Spatial Utilization Metrics (Method 1).
+# def plot_kernel_density_geemap(contour_gdf, gdf_filtered, output_filename='/Users/didemdost/Desktop/kernel_density_map_ee.html'):
+#     import ee
+#     import geemap
+#     import geopandas as gpd
 
-    Args:
-        gdf_filtered (GeoDataFrame): Filtered GeoDataFrame containing spatial data.
-        spatial_metrics (dict): Dictionary containing spatial metrics.
-        animal_id (str): Animal ID.
-        time_start (datetime): Start time of the dataset.
-        time_end (datetime, optional): End time of the dataset.
-        output_dir (str): Directory where the plot will be saved.
-    """
-    fig, ax = plt.subplots(figsize=(12, 8))
-    ax.contourf(spatial_metrics['xx'], spatial_metrics['yy'], spatial_metrics['kde_values'],
-                levels=[spatial_metrics['level_95'], spatial_metrics['level_50'], spatial_metrics['kde_values'].max()],
-                colors=['orange', 'red', 'darkred'], alpha=0.5)
+#     # Ensure Earth Engine is initialized
+#     try:
+#         ee.Initialize(project='ee-didemdostt')
+#     except Exception as e:
+#         print("Initializing Earth Engine...")
+#         ee.Authenticate()
+#         ee.Initialize(project='ee-didemdostt')
 
-    gdf_filtered.plot(ax=ax, color='blue', markersize=5, label='Animal Positions')
-    gpd.GeoSeries([spatial_metrics['convex_hull_polygon']]).plot(ax=ax, edgecolor='green', linewidth=2, label='Convex Hull', facecolor='none')
+#     # Reproject to WGS84 (EPSG:4326) for compatibility
+#     contour_gdf = contour_gdf.to_crs(epsg=4326)
+#     gdf_filtered = gdf_filtered.to_crs(epsg=4326)
 
-    buffer = 0.1
-    x_min, x_max = ax.get_xlim()
-    y_min, y_max = ax.get_ylim()
-    ax.set_xlim(x_min - buffer * abs(x_max - x_min), x_max + buffer * abs(x_max - x_min))
-    ax.set_ylim(y_min - buffer * abs(y_max - y_min), y_max + buffer * abs(y_max - y_min))
 
+#     # Get the center of the map
+#     center_lat = gdf_filtered.geometry.y.mean()
+#     center_lon = gdf_filtered.geometry.x.mean()
+#     center = [center_lat, center_lon]
+#     print(f"Map center coordinates: Latitude={center_lat}, Longitude={center_lon}")
+
+#     # Define the region of interest using the bounds with buffer
+#     bounds = contour_gdf.total_bounds  # minx, miny, maxx, maxy
+#     buffer_degree = 0.05  # Adjust as necessary
+#     minx = bounds[0] - buffer_degree
+#     miny = bounds[1] - buffer_degree
+#     maxx = bounds[2] + buffer_degree
+#     maxy = bounds[3] + buffer_degree
+#     region = ee.Geometry.Rectangle([minx, miny, maxx, maxy])
+
+#     print(f"Extended region bounds: [minx={minx}, miny={miny}, maxx={maxx}, maxy={maxy}]")
+
+#     # Create a date range based on your data
+#     date_start = '2023-01-01'  # Adjust as necessary
+#     date_end = '2023-12-31'    # Adjust as necessary
+
+#     # Use the correct Sentinel-2 dataset
+#     s2_collection = (ee.ImageCollection('COPERNICUS/S2_SR')
+#                      .filterDate(date_start, date_end)
+#                      .filterBounds(region)
+#                      .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 50)))  # Adjusted cloud cover
+
+#     # Check the number of images in the collection
+#     collection_size = s2_collection.size().getInfo()
+#     print(f"Number of images in the collection after filtering: {collection_size}")
+#     if collection_size == 0:
+#         print("No images found in the collection after filtering.")
+#         return
+
+#     # Take the median image
+#     s2_image = s2_collection.median().clip(region)
+
+#     # Check available bands
+#     band_names = s2_image.bandNames().getInfo()
+#     print(f"Available bands in the image: {band_names}")
+
+#     # Define visualization parameters
+#     vis_params = {
+#         'bands': ['B4', 'B3', 'B2'],  # True color bands
+#         'min': 0,
+#         'max': 3000,
+#         'gamma': [0.95, 1.1, 1],
+#     }
+
+#     # Verify if the specified bands are available
+#     if not all(band in band_names for band in vis_params['bands']):
+#         print("One or more specified bands are not available in the image.")
+#         print("Please check the available bands and update vis_params accordingly.")
+#         return
+
+#     # Create a geemap map
+#     Map = geemap.Map(center=center, zoom=10)
+
+#     # Add the Earth Engine image layer
+#     print("Adding Sentinel-2 Image layer to the map...")
+#     Map.addLayer(s2_image, vis_params, 'Sentinel-2 Image')
+
+#     # Add the contour polygons
+#     print("Adding Kernel Density Contours to the map...")
+#     Map.add_gdf(contour_gdf, layer_name='Kernel Density Contours')
+
+#     # Add the animal movement points
+#     print("Adding Animal Positions to the map...")
+#     Map.add_gdf(gdf_filtered, layer_name='Animal Positions')
+
+#     # Save the map as an HTML file
+#     try:
+#         print(f"Saving the map to {output_filename}...")
+#         Map.to_html(outfile=output_filename)
+#         print(f"Interactive map successfully saved to {output_filename}")
+#     except Exception as e:
+#         print(f"Failed to save the map: {e}")
+
+def plot_kernel_density_geemap(contour_gdf, gdf_filtered, output_filename='/Users/didemdost/Desktop/kernel_density_map_ee.html'):
+    import ee
+    import geemap
+    import geopandas as gpd
+
+    # Ensure Earth Engine is initialized
     try:
-        ctx.add_basemap(ax, crs=gdf_filtered.crs.to_string(), source=ctx.providers.Stamen.TonerLite)
+        ee.Initialize(project='ee-didemdostt')
     except Exception as e:
-        print(f"Error adding basemap: {e}")
-        print("Proceeding without basemap.")
+        print("Initializing Earth Engine...")
+        ee.Authenticate()
+        ee.Initialize(project='ee-didemdostt')
 
-    title = f"Spatial Utilization for {animal_id} from {time_start}"
-    if time_end:
-        title += f" to {time_end}"
-    ax.set_title(title)
-    ax.axis('off')
-    ax.legend()
-
-    plt.tight_layout()
-    os.makedirs(output_dir, exist_ok=True)
-    plot_file = os.path.join(output_dir, f'spatial_utilization_method1_{animal_id}.png')
-    plt.savefig(plot_file, dpi=300)
-    plt.close()
-    print(f"Spatial utilization plot (Method 1) saved to {plot_file}")
-
-def plot_spatial_kernel_density_method2(contour_gdf, animal_id, time_start, time_end=None, output_dir="/Users/didemdost/Desktop/geo_track/output"):
-    """
-    Plot Spatial Kernel Density Estimation Contours (Method 2) using geemap.
-
-    Args:
-        contour_gdf (GeoDataFrame): GeoDataFrame containing contour polygons.
-        animal_id (str): Animal ID.
-        time_start (datetime): Start time of the dataset.
-        time_end (datetime, optional): End time of the dataset.
-        output_dir (str): Directory where the plot will be saved.
-    """
-    if contour_gdf is None or contour_gdf.empty:
-        print("No contour polygons to plot for Method 2.")
-        return
-
-    # Ensure the GeoDataFrame has a CRS
-    if contour_gdf.crs is None:
-        raise ValueError("contour_gdf must have a CRS defined.")
-
-    # Project to WGS84 if not already
-    if contour_gdf.crs.to_epsg() != 4326:
-        contour_gdf = contour_gdf.to_crs(epsg=4326)
-        print("Projected contour_gdf to EPSG:4326.")
-
-    # Verify geometries
-    print("Geometry Types:", contour_gdf.geom_type.unique())
-    print("All Geometries Valid:", contour_gdf.is_valid.all())
-    if not contour_gdf.is_valid.all():
-        contour_gdf['geometry'] = contour_gdf['geometry'].buffer(0)
-        print("Fixed invalid geometries.")
-        print("All Geometries Valid after fixing:", contour_gdf.is_valid.all())
-
-    # Get total bounds [minx, miny, maxx, maxy]
-    bounds = contour_gdf.total_bounds
-    center_x = (bounds[0] + bounds[2]) / 2
-    center_y = (bounds[1] + bounds[3]) / 2
-
-    print(f"Map center: ({center_y}, {center_x})")
-    print(f"Number of contour polygons: {len(contour_gdf)}")
-    print("First few geometries:", contour_gdf.geometry.head())
-
-    # Initialize the map with Google Hybrid basemap
-    Map = geemap.Map(center=[center_y, center_x], zoom=10, basemap='HYBRID')
-
-    # Add the contour polygons with correct styling
-    Map.add_gdf(
-        contour_gdf,
-        layer_name='Kernel Density Contours',
-    )
-
-    # Add the scale bar using ipyleaflet's ScaleControl
-    Map.add_control(ScaleControl(position='bottomleft'))
-
-    # Optional: Add legend manually
-    # Since geemap doesn't have a built-in add_legend, we'll add a custom legend
-    #add_custom_legend(Map, title='Density Levels')
-
-    # Ensure output directory exists
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Save the map as HTML
-    map_file = os.path.join(output_dir, f'kernel_density_map_method2_{animal_id}.html')
-    Map.to_html(map_file)
-    print(f"Kernel density map (Method 2) saved to {map_file}")
-
-    # Optional: Automatically open the map in the default web browser
-    try:
-        import webbrowser
-        webbrowser.open('file://' + os.path.realpath(map_file))
-        print(f"Opened the map in the default web browser.")
-    except Exception as e:
-        print(f"Could not open the map automatically: {e}")
-
-import os
-import matplotlib.pyplot as plt
-import cartopy.crs as ccrs
-import cartopy.io.img_tiles as cimgt
-import cartopy.io.img_tiles
-import geopandas as gpd
-import ee
-import os
-import matplotlib.pyplot as plt
-import cartopy.crs as ccrs
-import cartopy.io.img_tiles as cimgt
-import geopandas as gpd
-
-def plot_kernel_density_cartopy(contour_gdf, gdf_filtered, output_filename='/Users/didemdost/Desktop/kernel_density_mappp.png'):
     # Reproject to WGS84 (EPSG:4326) for compatibility
     contour_gdf = contour_gdf.to_crs(epsg=4326)
     gdf_filtered = gdf_filtered.to_crs(epsg=4326)
 
-    # Define the map extent
-    minx, miny, maxx, maxy = contour_gdf.total_bounds
+# Convert datetime columns to strings
+    datetime_cols = gdf_filtered.select_dtypes(include=['datetime64[ns]', 'datetime64[ns, UTC]']).columns
+    for col in datetime_cols:
+        gdf_filtered[col] = gdf_filtered[col].astype(str)
 
-    # Create a Cartopy map
-    fig = plt.figure(figsize=(12, 12))
-    ax = plt.axes(projection=ccrs.PlateCarree())
+    datetime_cols_contour = contour_gdf.select_dtypes(include=['datetime64[ns]', 'datetime64[ns, UTC]']).columns
+    for col in datetime_cols_contour:
+        contour_gdf[col] = contour_gdf[col].astype(str)
+    # Get the center of the map
+    center_lat = gdf_filtered.geometry.y.mean()
+    center_lon = gdf_filtered.geometry.x.mean()
+    center = [center_lat, center_lon]
+    print(f"Map center coordinates: Latitude={center_lat}, Longitude={center_lon}")
 
-    # Center the map on the data
-    ax.set_extent([minx, maxx, miny, maxy], crs=ccrs.PlateCarree())
+    # Define the region of interest using the bounds with buffer
+    bounds = contour_gdf.total_bounds  # minx, miny, maxx, maxy
+    buffer_degree = 0.05  # Adjust as necessary
+    minx = bounds[0] - buffer_degree
+    miny = bounds[1] - buffer_degree
+    maxx = bounds[2] + buffer_degree
+    maxy = bounds[3] + buffer_degree
+    region = ee.Geometry.Rectangle([minx, miny, maxx, maxy])
 
-    # Add the OpenStreetMap basemap
-    tiler = cimgt.OSM()
-    ax.add_image(tiler, 10, interpolation='bilinear', zorder=1)  # Adjust the zoom level as needed
+    print(f"Extended region bounds: [minx={minx}, miny={miny}, maxx={maxx}, maxy={maxy}]")
 
-    # Plot the kernel density contours
-    contour_gdf.plot(
-        column='level',
-        ax=ax,
-        alpha=0.5,
-        cmap='Reds',
-        legend=True,
-        legend_kwds={'label': "Density Level"},
-        zorder=3,  # Ensure contours are above the basemap
-        transform=ccrs.PlateCarree()
-    )
+    # Create a date range based on your data
+    date_start = '2023-01-01'  # Adjust as necessary
+    date_end = '2023-12-31'    # Adjust as necessary
 
-    # Plot the animal's movement points
-    gdf_filtered.plot(
-        ax=ax,
-        markersize=50,  # Adjust marker size as needed
-        color='blue',
-        alpha=0.7,
-        label='Animal Positions',
-        zorder=4,  # Ensure points are above the contours
-        transform=ccrs.PlateCarree()
-    )
+    # Use the correct Sentinel-2 dataset
+    s2_collection = (ee.ImageCollection('COPERNICUS/S2_SR')
+                     .filterDate(date_start, date_end)
+                     .filterBounds(region)
+                     .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 50)))  # Adjusted cloud cover
 
-    # Add legend
-    handles, labels = ax.get_legend_handles_labels()
-    if handles and labels:
-        ax.legend(handles, labels, loc='lower right')
+    # Check the number of images in the collection
+    collection_size = s2_collection.size().getInfo()
+    print(f"Number of images in the collection after filtering: {collection_size}")
+    if collection_size == 0:
+        print("No images found in the collection after filtering.")
+        return
 
-    # Add title and labels
-    ax.set_title('Spatial Kernel Density Estimation with OSM Basemap')
-    ax.set_xlabel('Longitude')
-    ax.set_ylabel('Latitude')
+    # Take the median image
+    s2_image = s2_collection.median().clip(region)
 
-    # Ensure the save directory exists
-    save_dir = os.path.dirname(output_filename)
-    os.makedirs(save_dir, exist_ok=True)
+    # Check available bands
+    band_names = s2_image.bandNames().getInfo()
+    print(f"Available bands in the image: {band_names}")
 
-    # Save the figure
-    fig.savefig(output_filename, dpi=300, bbox_inches='tight')
-    print(f"Map has been saved to {output_filename}")
+    # Define visualization parameters
+    vis_params = {
+        'bands': ['B4', 'B3', 'B2'],  # True color bands
+        'min': 0,
+        'max': 3000,
+        'gamma': [0.95, 1.1, 1],
+    }
 
-    # Close the figure to free up memory
-    plt.close(fig)
+    # Verify if the specified bands are available
+    if not all(band in band_names for band in vis_params['bands']):
+        print("One or more specified bands are not available in the image.")
+        print("Please check the available bands and update vis_params accordingly.")
+        return
 
-# Example usage:
-# Replace 'contour_gdf' and 'gdf_filtered' with your actual GeoDataFrames
-# contour_gdf = gpd.read_file('path_to_contour_shapefile.shp')
-# gdf_filtered = gpd.read_file('path_to_filtered_points_shapefile.shp')
+    # Create a geemap map
+    Map = geemap.Map(center=center, zoom=10)
 
-# Call the function with your data
-# plot_kernel_density_cartopy(contour_gdf, gdf_filtered)
+    # Add the Earth Engine image layer
+    print("Adding Sentinel-2 Image layer to the map...")
+    Map.addLayer(s2_image, vis_params, 'Sentinel-2 Image')
+
+    # Add the contour polygons
+    print("Adding Kernel Density Contours to the map...")
+    Map.add_gdf(contour_gdf, layer_name='Kernel Density Contours')
+
+    # Add the animal movement points
+    print("Adding Animal Positions to the map...")
+    Map.add_gdf(gdf_filtered, layer_name='Animal Positions')
+
+    # Save the map as an HTML file
+    try:
+        print(f"Saving the map to {output_filename}...")
+        Map.save(output_filename)  # Correct usage
+        print(f"Interactive map successfully saved to {output_filename}")
+    except Exception as e:
+        print(f"Failed to save the map: {e}")
 
 
 def main():
-
-    ee.Authenticate()
-    ee.Initialize(project='ee-didemdostt')
 
     # Input CSV file
     file_path = "/Users/didemdost/Desktop/geo_track/data/NPL28.csv"
@@ -586,11 +573,11 @@ def main():
     # Step 2: Convert DataFrame to GeoDataFrame
     gdf = convert_csv_to_geodataframe(df)
     if gdf is None or gdf.empty:
-       print("Failed to create GeoDataFrame.")
-       return
+        print("Failed to create GeoDataFrame.")
+        return
 
     # Step 3: Reproject to EPSG:3857
-    gdf = gdf.to_crs(epsg=3857)
+    gdf = gdf.to_crs(epsg=4326)
     print("GeoDataFrame reprojected to EPSG:3857.")
     print("CRS after reprojection:", gdf.crs)
 
@@ -619,16 +606,15 @@ def main():
         print(e)
         return
 
-# Step 6: Compute Spatial Kernel Density
+    # Step 6: Compute Spatial Kernel Density
     cutoff_list = [0.25, 0.5, 0.75, 0.9]  # Adjust as necessary
     contour_gdf = spatial_kernel_density(gdf_filtered, cutoff_list)
     if contour_gdf is None:
         print("Failed to compute spatial kernel density.")
         return
 
-
-# Call the plotting function
-    plot_kernel_density_cartopy(contour_gdf, gdf_filtered)
+    # Step 7: Plot and Save the Map using the Updated Function
+    plot_kernel_density_geemap(contour_gdf, gdf_filtered,  output_filename='/Users/didemdost/Desktop/kernel_density_map_ee.html')
 
     # # Step 6: Calculate Spatial Utilization Metrics (Method 1)
     # spatial_metrics = calculate_spatial_utilization(gdf_filtered, bw_method=0.2)
