@@ -8,7 +8,7 @@ from scipy.stats import gaussian_kde
 from scipy.spatial import ConvexHull
 from shapely.geometry import Polygon
 import matplotlib.pyplot as plt
-import contextily as ctx
+#import contextily as ctx
 import seaborn as sns
 import geemap
 import ee
@@ -21,21 +21,114 @@ from pyproj import Proj
 
 os.environ['PROJ_LIB'] = datadir.get_data_dir()
 
+import sys
+import os
 
-def standardize_headers(df):
+import pandas as pd
+import re
+import sys
+import os
+
+import pandas as pd
+import re
+
+import pandas as pd
+import re
+
+def standardize_headers(input_csv):
+    """
+    Reads a CSV file, standardizes column headers, generates a formatted datetime column 't',
+    and returns the standardized DataFrame.
+
+    Args:
+        file_path (str): Path to the input CSV file.
+
+    Returns:
+        pd.DataFrame: DataFrame with standardized headers and a new 't' column, or None if an error occurs.
+    """
+    # Define header mappings for standardization
     header_mapping = {
-        r'^Individual-local.*': 'ID_Ind',
-        r'^Individual-name.*': 'ID_Ind',
-        r'^Individual_Name.*': 'ID_Ind',
-        'Location-long': 'LONGITUDE',
-        'Location-lat': 'LATITUDE',
-        r'^Longitude.*': 'LONGITUDE',
-        r'^Latitude.*': 'LATITUDE',
-        'GPS Longitude': 'LONGITUDE',
-        'GPS Latitude': 'LATITUDE',
+        "^Individual-local.*": "ID_Ind", 
+        "^Individual-name.*": "ID_Ind", 
+        "^Individual_Name.*": "ID_Ind", 
+        "Location-long": "LONGITUDE", 
+        "Location-lat": "LATITUDE", 
+        "^Longitude.*": "LONGITUDE", 
+        "^Latitude.*": "LATITUDE",
+        "GPS Longitude": "LONGITUDE", 
+        "GPS Latitude": "LATITUDE",
     }
+
+    # Define datetime formats for each time column
+    datetime_formats = {
+        'Acquisition Start Time': '%d/%m/%Y %H:%M',
+        'Timestamp (GMT+2)': '%d/%m/%Y %H:%M',
+        'Time Stamp UTC': '%d/%m/%Y %H:%M', 
+        'Time Stamp UTC1': '%m/%d/%Y %H:%M',
+        'Date': '%d/%m/%Y',
+        'DATE (GMT+2)': '%Y-%m-%d',
+        'Date1': '%m/%d/%y',
+    }
+
+    try:
+        # Load CSV data
+        df = pd.read_csv(input_csv)
+    except Exception as e:
+        print(f"Error reading {input_csv}: {e}")
+        return None
+
+    # Standardize headers
     df.columns = [next((new_name for pattern, new_name in header_mapping.items() if re.match(pattern, col)), col) for col in df.columns]
+
+    # Initialize 't' column as NaT for datetime
+    df['t'] = pd.NaT
+
+    # Attempt to parse datetime from different column combinations
+    if 'Date' in df.columns and 'Time' in df.columns:
+        # Combine Date and Time columns and try parsing with both 24-hour and 12-hour formats
+        df['ct'] = df['Date'].astype(str) + ' ' + df['Time'].astype(str)
+        df['t'] = pd.to_datetime(df['ct'], errors='coerce', dayfirst=True)
+        
+        # Check for any rows with NaT in 't' and attempt to parse using 12-hour format with AM/PM
+        df.loc[df['t'].isna(), 't'] = pd.to_datetime(df.loc[df['t'].isna(), 'ct'], errors='coerce', format='%d/%m/%Y %I:%M:%S %p')
+    
+    elif 'DATE (GMT+2)' in df.columns and 'TIME (GMT+2)' in df.columns:
+        df['ct'] = df['DATE (GMT+2)'].astype(str) + ' ' + df['TIME (GMT+2)'].astype(str)
+        df['t'] = pd.to_datetime(df['ct'], errors='coerce', dayfirst=True)
+        
+        # Handle any NaT cases using 12-hour format if necessary
+        df.loc[df['t'].isna(), 't'] = pd.to_datetime(df.loc[df['t'].isna(), 'ct'], errors='coerce', format='%Y-%m-%d %I:%M:%S %p')
+    
+    elif 'Date1' in df.columns and 'Time1' in df.columns:
+        df['ct'] = df['Date1'].astype(str) + ' ' + df['Time1'].astype(str)
+        df['t'] = pd.to_datetime(df['ct'], errors='coerce', dayfirst=True)
+        
+        # Handle any NaT cases using 12-hour format if necessary
+        df.loc[df['t'].isna(), 't'] = pd.to_datetime(df.loc[df['t'].isna(), 'ct'], errors='coerce', format='%m/%d/%y %I:%M:%S %p')
+
+    # If 't' column is still NaT, try parsing single datetime columns if they exist
+    for col, fmt in datetime_formats.items():
+        if col in df.columns and df['t'].isna().all():  # Only attempt if 't' is still NaT
+            try:
+                df['t'] = pd.to_datetime(df[col], format=fmt, errors='coerce')
+            except Exception as e:
+                print(f"Error parsing {col} in {input_csv}: {e}")
+
+    # Remove timezone info and ensure 't' column is in the correct format
+    if pd.api.types.is_datetime64_any_dtype(df['t']):
+        df['t'] = df['t'].dt.strftime('%Y-%m-%d %H:%M:%S')
+    else:
+        print(f"Unable to parse datetime in any columns for {input_csv}")
+
+    # Drop temporary 'ct' column if exists
+    if 'ct' in df.columns:
+        df = df.drop(columns=['ct'])
+
     return df
+
+
+
+
 
 def convert_csv_to_geodataframe(df):
     """
@@ -430,7 +523,6 @@ def plot_kernel_density_geemap(contour_gdf, gdf_filtered, output_filename='/User
     print("Adding Animal Positions to the map...")
     Map.add_gdf(gdf_filtered, layer_name='Animal Positions')
 
-    # Save the map as an HTML file
     try:
         print(f"Saving the map to {output_filename}...")
         Map.save(output_filename)  # Correct usage

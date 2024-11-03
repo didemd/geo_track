@@ -16,102 +16,146 @@ import seaborn as sns
 import re  # Added import for regular expressions
 import pickle
 import sys  # Added import for system-specific parameters and functions
+import re
 
 matplotlib.use('Agg')  
 
 
 def standardize_headers(file_path):
     """
-    Standardizes the headers of a CSV file to ensure consistency across datasets.
+    Standardizes the headers of a CSV file, parses datetime columns, and ensures data consistency.
 
     Args:
         file_path (str): Path to the CSV file.
 
     Returns:
-        pd.DataFrame: A DataFrame with standardized headers, or None if an error occurs.
+        pd.DataFrame or None: A standardized DataFrame, or None if an error occurs.
     """
-    # Read the CSV file
     try:
         df = pd.read_csv(file_path)
     except Exception as e:
         print(f"Error reading {file_path}: {e}")
         return None
 
-    # Define datetime formats for each time column
-    datetime_formats = {
-        'Acquisition Start Time': '%d/%m/%Y %H:%M',
-        'Timestamp (GMT+2)': '%d/%m/%Y %H:%M',
-        'Time Stamp UTC': '%d/%m/%Y %H:%M', 
-        'Time Stamp UTC1': '%m/%d/%Y %H:%M',
-        'Date': '%d/%m/%Y',
-        'DATE (GMT+2)': '%Y-%m-%d',
-        'Date1': '%m/%d/%y',
-    }
-    
+    print(f"\n--- Processing File: {os.path.basename(file_path)} ---")
+    print("\n--- Initial DataFrame ---")
+    print(df.head())
+    print(f"Columns: {df.columns.tolist()}\n")
+
+    # Define header mappings using regex patterns
     header_mapping = {
-        "^Individual-local.*": "ID_Ind", 
-        "^Individual-name.*": "ID_Ind", 
-        "^Individual_Name.*": "ID_Ind", 
-        "Location-long": "Longitude", 
-        "Location-lat": "Latitude", 
-        "^Longitude.*": "Longitude", 
-        "^Latitude.*": "Latitude",
-        "GPS Longitude": "Longitude", 
-        "GPS Latitude": "Latitude",
+        "^Individual-local.*": "ID_Ind",
+        "^Individual-name.*": "ID_Ind",
+        "^Individual_Name.*": "ID_Ind",
+        "Location-long": "LONGITUDE",
+        "Location-lat": "LATITUDE",
+        "^Longitude.*": "LONGITUDE",
+        "^Latitude.*": "LATITUDE",
+        "GPS Longitude": "LONGITUDE",
+        "GPS Latitude": "LATITUDE",
     }
-    
-    parsed_datetime = False
 
-    # Try to parse each datetime column with its specific format
-    for col, fmt in datetime_formats.items():
-        if col in df.columns:
-            try:
-                if 'Date' in df.columns and 'Time' in df.columns:
-                    df['ct'] = df['Date'] + ' ' + df['Time']
-                    df['t'] = pd.to_datetime(df['ct'], format='%d/%m/%Y %H:%M:%S', errors='coerce')
-                    df['t'] = pd.to_datetime(df['ct'], format='%d/%m/%Y %I:%M:%S %p', errors='coerce')
-                    df['t'] = pd.to_datetime(df['ct'], dayfirst=True, errors='coerce')
-                elif 'DATE (GMT+2)' in df.columns and 'TIME (GMT+2)' in df.columns:
-                    df['ct'] = df['DATE (GMT+2)'] + ' ' + df['TIME (GMT+2)']
-                    df['t'] = pd.to_datetime(df['ct'], yearfirst=True, format='%Y-%m-%d %H:%M:%S', errors='coerce')
-                elif 'Date1' in df.columns and 'Time1' in df.columns:
-                    df['ct'] = df['Date1'] + ' ' + df['Time1']
-                    df['t'] = pd.to_datetime(df['ct'], format='%m/%d/%y %H:%M:%S', errors='coerce') 
-                else:
-                    df['t'] = pd.to_datetime(df[col], format=fmt, errors='coerce')
-                                
-                df = df.dropna(subset=['t'])  # Drop rows where parsing failed
-                df = df.set_index('t').tz_localize(None)  # Set index and remove timezone info
-                parsed_datetime = True
-                
-                break
-            except Exception as e:
-                print(f"Error parsing {col}: {e}")
-
-    if not parsed_datetime:
-        print(f"Unable to parse datetime from any of the columns in {file_path}")
-
-    # Function to rename columns based on the mapping
+    # Rename the columns using the mapping
     def rename_column(col_name):
         for pattern, new_name in header_mapping.items():
             if re.match(pattern, col_name, re.IGNORECASE):
                 return new_name
         return col_name
 
-    # Rename the columns using the custom function
     df = df.rename(columns=rename_column)
+    print("\n--- DataFrame after Header Standardization ---")
+    print(df.head())
+    print(f"Columns: {df.columns.tolist()}\n")
 
-    # Ensure the dataframe has only the standardized headers that match the mapping
-    standard_headers = list(header_mapping.values())
-    # Retain other necessary columns (e.g., 'TAG') if they exist
-    required_columns = ['ID_Ind', 'Longitude', 'Latitude', 'TAG', 'Date', 'Time']
-    # Include columns that are present in df to avoid KeyError
-    standard_headers = [col for col in required_columns if col in df.columns] + [
-        col for col in df.columns if col not in standard_headers and col not in required_columns
+    # Check for any unexpected headers that were not renamed
+    expected_headers = set(header_mapping.values()).union({
+        't', 'ct', 'Index', 'LoadedBatV', 'UnloadedBatv', 'Mortality', 'ExtFixRequest',
+        'Date', 'Time', 'DATE (GMT+2)', 'TIME (GMT+2)', 'Date1', 'Time1'
+    })
+    actual_headers = set(df.columns)
+    unexpected_headers = actual_headers - expected_headers
+
+    if unexpected_headers:
+        print(f"Warning: The following columns are unexpected and were not renamed: {unexpected_headers}")
+    else:
+        print("All headers are as expected.")
+
+    # Define possible date and time column combinations
+    datetime_combinations = [
+        ('Date', 'Time'),
+        ('DATE (GMT+2)', 'TIME (GMT+2)'),
+        ('Date1', 'Time1')
     ]
-    df = df[[col for col in df.columns if col in standard_headers]]
 
-    return df  # Return the DataFrame with 't' column set as index
+    # Initialize 't' column
+    df['t'] = pd.NaT
+
+    # Attempt to parse datetime from available combinations
+    for date_col, time_col in datetime_combinations:
+        if date_col in df.columns and time_col in df.columns:
+            # Combine Date and Time columns
+            df['ct'] = df[date_col].astype(str).str.strip() + ' ' + df[time_col].astype(str).str.strip()
+            
+            # Parse datetime with multiple formats
+            df['t'] = pd.to_datetime(
+                df['ct'],
+                dayfirst=True,
+                infer_datetime_format=True,
+                errors='coerce'
+            )
+            num_parsed = df['t'].notna().sum()
+            print(f"Parsed datetime from columns '{date_col}' and '{time_col}': {num_parsed} entries successfully parsed.")
+            
+            # If any datetimes were parsed, stop checking other combinations
+            if num_parsed > 0:
+                break
+
+    # If 't' column is still all NaT, attempt to parse any single datetime column
+    if df['t'].isna().all():
+        possible_datetime_cols = ['Acquisition Start Time', 'Timestamp (GMT+2)', 'Time Stamp UTC', 'Time Stamp UTC1']
+        for col in possible_datetime_cols:
+            if col in df.columns:
+                df['t'] = pd.to_datetime(
+                    df[col],
+                    dayfirst=True,
+                    infer_datetime_format=True,
+                    errors='coerce'
+                )
+                num_parsed = df['t'].notna().sum()
+                print(f"Parsed datetime from column '{col}': {num_parsed} entries successfully parsed.")
+                if num_parsed > 0:
+                    break
+
+    # Inform the user about any rows that failed to parse datetime
+    num_failed = df['t'].isna().sum()
+    if num_failed > 0:
+        print(f"Warning: {num_failed} rows failed to parse datetime and will have NaT in 't' column.")
+    else:
+        print("All rows parsed datetime successfully.")
+
+    # Remove temporary 'ct' column if exists
+    if 'ct' in df.columns:
+        df = df.drop(columns=['ct'])
+
+    # Format the 't' column to 'YYYY-MM-DD HH:MM:SS'
+    if pd.api.types.is_datetime64_any_dtype(df['t']):
+        df['t'] = df['t'].dt.strftime('%Y-%m-%d %H:%M:%S')
+    else:
+        print("Error: 't' column is not in datetime format.")
+
+    # Check required columns
+    required_columns = ['ID_Ind', 'LONGITUDE', 'LATITUDE', 't']
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    if missing_columns:
+        print(f"Error: Missing required columns: {missing_columns}")
+        return None
+
+    # Ensure that all required columns are present before proceeding
+    if not all(col in df.columns for col in required_columns):
+        print(f"Error: Not all required columns are present after processing.")
+        return None
+
+    return df  # Return the standardized DataFrame
 
 
 def combine_csv_files(directory):
