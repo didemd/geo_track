@@ -1,3 +1,10 @@
-input_directory: "data"
-# output_file: logs/"gdf_heads.txt"
-log_file_csv: "logs/get_csv_heads.log"
+animals:
+  - ID: 'NPL28_'
+    time_start: '2023-04-01 00:00:26'
+    time_end: '2023-04-30 23:09:10'
+  - ID: 'NPL35_'
+    time_start: '2023-04-01 00:00:20'
+    time_end: '2023-04-30 22:00:32'
+  - ID: 'NPL42_'
+    time_start: '2023-06-01 00:00:02'
+    time_end: '2023-06-30 22:00:08'
