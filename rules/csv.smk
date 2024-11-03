@@ -8,4 +8,3 @@ rule clean_csv:
         mkdir -p output/cleaned
         python /Users/didemdost/Desktop/geo_track/scripts/clean_csv.py {input} {output}
         """
-

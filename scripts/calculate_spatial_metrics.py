@@ -12,28 +12,35 @@ def main():
     parser.add_argument('--time_start', required=True, help='Start time for filtering.')
     parser.add_argument('--time_end', required=True, help='End time for filtering.')
     args = parser.parse_args()
+    print("Arguments:", args)
 
-    # Read and concatenate all CSVs
+
+
     dfs = [pd.read_csv(f) for f in args.input_csvs]
     df = pd.concat(dfs, ignore_index=True)
+    print(df.head())  # Check the first few rows
 
-    # Parse the 't' column as datetime for filtering
     df['t'] = pd.to_datetime(df['t'], errors='coerce')
+    print(df['t'].head())  # Ensure dates are parsed correctly
     time_start = pd.to_datetime(args.time_start)
     time_end = pd.to_datetime(args.time_end)
 
-    # Filter based on time range
     df_filtered = df[(df['t'] >= time_start) & (df['t'] <= time_end)]
+    print(df_filtered.head())  # Ensure the data is correctly filtered
 
-    # Convert to GeoDataFrame and perform spatial calculations
     gdf = convert_csv_to_geodataframe(df_filtered)
     contour_gdf = spatial_kernel_density(gdf, [0.5, 0.9])
+    print(contour_gdf)  # Ensure contours are generated correctly
 
-    # Ensure output directories exist
     gpkg_dir = os.path.dirname(args.gpkg_output)
     plot_dir = os.path.dirname(args.plot_output)
-    os.makedirs(gpkg_dir, exist_ok=True)
-    os.makedirs(plot_dir, exist_ok=True)
+
+    try:
+        os.makedirs(gpkg_dir, exist_ok=True)
+        os.makedirs(plot_dir, exist_ok=True)
+    except Exception as e:
+        print(f"Error creating directories: {e}")
+
 
     # Save outputs
     if contour_gdf is not None:

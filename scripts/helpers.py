@@ -294,43 +294,51 @@ def calculate_spatial_utilization(gdf_filtered, bw_method):
         print(f"Error calculating spatial utilization: {e}")
         return None
 
+# helpers.py
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+from shapely.geometry import Polygon
+import geopandas as gpd
+
 def spatial_kernel_density(gdf, cutoff_list):
     """
-    Perform Spatial Kernel Density Estimation (Method 2) and extract contour polygons.
+    Loop through a given list of levels (cutoff_list) and calculate the corresponding Kernel Density Estimates
+    for the specified GeoDataFrame (gdf).
 
-    Args:
-        gdf (GeoDataFrame): GeoDataFrame containing spatial data.
-        cutoff_list (list of float): List of density levels to extract contours.
+    Parameters:
+    - gdf: GeoDataFrame containing point geometries.
+    - cutoff_list: List of density levels to calculate contours.
 
     Returns:
-        gpd.GeoDataFrame: GeoDataFrame containing contour polygons with associated density levels.
+    - contour_gdf: GeoDataFrame containing density contours with 'density' and 'geometry' columns.
     """
     level_polygons = []
 
     for level in cutoff_list:
-        plt.figure(figsize=(8, 6))
-        kde_plot = sns.kdeplot(x=gdf.geometry.x, y=gdf.geometry.y, levels=[level, 1], fill=True, cmap="Reds")
+        # Perform KDE plot using seaborn
+        kde = sns.kdeplot(
+            x=gdf["geometry"].x,
+            y=gdf["geometry"].y,
+            levels=[level, 1],
+            fill=False,  # Do not fill the contours
+            thresh=level / 100  # Threshold for contour levels
+        )
+
+        # Extract contour lines and convert to polygons
+        for col in kde.collections:
+            for contour in col.get_paths():
+                for ncp, cp in enumerate(contour.to_polygons()):
+                    if cp is not None and len(cp) > 2:
+                        polygon = Polygon(cp)
+                        level_polygons.append({"density": level, "geometry": polygon})
+
         plt.close()
 
-        for collection in kde_plot.collections:
-            for path in collection.get_paths():
-                # Each path can consist of multiple polygons
-                for polygon in path.to_polygons():
-                    if len(polygon) < 3:
-                        continue  # Not a valid polygon
-                    new_shape = Polygon(polygon)
-                    if not new_shape.is_valid:
-                        new_shape = new_shape.buffer(0)
-                        if not new_shape.is_valid:
-                            continue  # Skip invalid geometries
-                    level_polygons.append({"level": level, "geometry": new_shape})
-
-    if not level_polygons:
-        print("No contour polygons were generated.")
-        return None
-
+    # Create GeoDataFrame with 'density' and 'geometry' columns
     contour_gdf = gpd.GeoDataFrame(level_polygons, geometry="geometry", crs=gdf.crs)
     return contour_gdf
+
 
 # def plot_kernel_density_geemap(contour_gdf, gdf_filtered, output_filename='/Users/didemdost/Desktop/kernel_density_map_ee.html'):
 #     import ee
@@ -427,6 +435,36 @@ def spatial_kernel_density(gdf, cutoff_list):
 #         print(f"Interactive map successfully saved to {output_filename}")
 #     except Exception as e:
 #         print(f"Failed to save the map: {e}")
+
+import matplotlib.pyplot as plt
+
+# helpers.py
+import matplotlib.pyplot as plt
+
+def plot_kernel_density_no_basemap(contour_gdf, gdf, output_filename):
+    """
+    Plots kernel density without a basemap.
+
+    Parameters:
+    - contour_gdf: GeoDataFrame containing density contours.
+    - gdf: GeoDataFrame containing original data points.
+    - output_filename: Path to save the plot.
+    """
+    try:
+        fig, ax = plt.subplots(figsize=(10, 10))
+        gdf.plot(ax=ax, markersize=5, alpha=0.5, label='Data Points', color='blue')
+        contour_gdf.plot(ax=ax, column='density', cmap='viridis', alpha=0.7, legend=True, label='Density Contours')
+        ax.set_title('Kernel Density without Basemap')
+        ax.set_xlabel('Longitude')
+        ax.set_ylabel('Latitude')
+        plt.legend()
+        plt.savefig(output_filename, dpi=300)
+        plt.close()
+    except Exception as e:
+        print(f"Failed to create plot without basemap: {e}")
+        raise
+
+
 
 def plot_kernel_density_geemap(contour_gdf, gdf_filtered, output_filename='/Users/didemdost/Desktop/kernel_density_map_ee.html'):
     import ee
@@ -626,3 +664,198 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# # helpers.py
+
+# import pandas as pd
+# import geopandas as gpd
+# import re
+# import numpy as np
+# from shapely.geometry import Polygon
+# import seaborn as sns
+# import matplotlib.pyplot as plt
+# import os
+
+# def standardize_headers(input_csv):
+#     # Define header mappings for standardization
+#     header_mapping = {
+#         "^Individual-local.*": "ID_Ind", 
+#         "^Individual-name.*": "ID_Ind", 
+#         "^Individual_Name.*": "ID_Ind", 
+#         "Location-long": "LONGITUDE", 
+#         "Location-lat": "LATITUDE", 
+#         "^Longitude.*": "LONGITUDE", 
+#         "^Latitude.*": "LATITUDE",
+#         "GPS Longitude": "LONGITUDE", 
+#         "GPS Latitude": "LATITUDE",
+#     }
+
+#     # Define datetime formats for each time column
+#     datetime_formats = {
+#         'Acquisition Start Time': '%d/%m/%Y %H:%M',
+#         'Timestamp (GMT+2)': '%d/%m/%Y %H:%M',
+#         'Time Stamp UTC': '%d/%m/%Y %H:%M', 
+#         'Time Stamp UTC1': '%m/%d/%Y %H:%M',
+#         'Date': '%d/%m/%Y',
+#         'DATE (GMT+2)': '%Y-%m-%d',
+#         'Date1': '%m/%d/%y',
+#     }
+
+#     try:
+#         df = pd.read_csv(input_csv)
+#     except Exception as e:
+#         print(f"Error reading {input_csv}: {e}")
+#         return None
+
+#     # Standardize headers
+#     df.columns = [next((new_name for pattern, new_name in header_mapping.items() if re.match(pattern, col)), col) for col in df.columns]
+
+#     # Initialize 't' column as NaT for datetime
+#     df['t'] = pd.NaT
+
+#     # Attempt to parse datetime from different column combinations
+#     if 'Date' in df.columns and 'Time' in df.columns:
+#         df['ct'] = df['Date'].astype(str) + ' ' + df['Time'].astype(str)
+#         df['t'] = pd.to_datetime(df['ct'], errors='coerce', dayfirst=True)
+#         df.loc[df['t'].isna(), 't'] = pd.to_datetime(df.loc[df['t'].isna(), 'ct'], errors='coerce', format='%d/%m/%Y %I:%M:%S %p')
+#     elif 'DATE (GMT+2)' in df.columns and 'TIME (GMT+2)' in df.columns:
+#         df['ct'] = df['DATE (GMT+2)'].astype(str) + ' ' + df['TIME (GMT+2)'].astype(str)
+#         df['t'] = pd.to_datetime(df['ct'], errors='coerce', dayfirst=True)
+#     elif 'Date1' in df.columns and 'Time1' in df.columns:
+#         df['ct'] = df['Date1'].astype(str) + ' ' + df['Time1'].astype(str)
+#         df['t'] = pd.to_datetime(df['ct'], errors='coerce', dayfirst=True)
+
+#     # If 't' column is still NaT, try parsing single datetime columns
+#     for col, fmt in datetime_formats.items():
+#         if col in df.columns and df['t'].isna().all():
+#             try:
+#                 df['t'] = pd.to_datetime(df[col], format=fmt, errors='coerce')
+#             except Exception as e:
+#                 print(f"Error parsing {col} in {input_csv}: {e}")
+
+#     # Remove timezone info and ensure 't' column is in the correct format
+#     if pd.api.types.is_datetime64_any_dtype(df['t']):
+#         df['t'] = df['t'].dt.strftime('%Y-%m-%d %H:%M:%S')
+#     else:
+#         print(f"Unable to parse datetime in any columns for {input_csv}")
+
+#     # Drop temporary 'ct' column if exists
+#     if 'ct' in df.columns:
+#         df = df.drop(columns=['ct'])
+
+#     return df
+
+# def convert_csv_to_geodataframe(df):
+#     try:
+#         geometry = gpd.points_from_xy(df['LONGITUDE'], df['LATITUDE'])
+#         gdf = gpd.GeoDataFrame(df, geometry=geometry, crs='EPSG:4326')
+#         return gdf
+#     except Exception as e:
+#         print(f"Error during GeoDataFrame creation: {e}")
+#         return None
+
+# def spatial_kernel_density(gdf, cutoff_list):
+#     level_polygons = []
+
+#     for level in cutoff_list:
+#         kde = sns.kdeplot(
+#             x=gdf["geometry"].x,
+#             y=gdf["geometry"].y,
+#             levels=[level],
+#             fill=False
+#         )
+
+#         for col in kde.collections:
+#             for contour in col.get_paths():
+#                 for ncp, cp in enumerate(contour.to_polygons()):
+#                     if cp is not None and len(cp) > 2:
+#                         polygon = Polygon(cp)
+#                         level_polygons.append({"density": level, "geometry": polygon})
+
+#         plt.close()
+
+#     contour_gdf = gpd.GeoDataFrame(level_polygons, geometry="geometry", crs=gdf.crs)
+#     return contour_gdf
+
+# def plot_kernel_density_geemap(contour_gdf, gdf_filtered, output_filename):
+#     import ee
+#     import geemap
+
+#     # Ensure Earth Engine is initialized
+#     try:
+#         ee.Initialize()
+#     except Exception as e:
+#         ee.Authenticate()
+#         ee.Initialize()
+
+#     contour_gdf = contour_gdf.to_crs(epsg=4326)
+#     gdf_filtered = gdf_filtered.to_crs(epsg=4326)
+
+#     # Convert datetime columns to strings to avoid serialization issues
+#     datetime_cols = gdf_filtered.select_dtypes(include=['datetime64[ns]', 'datetime64[ns, UTC]']).columns
+#     for col in datetime_cols:
+#         gdf_filtered[col] = gdf_filtered[col].astype(str)
+
+#     datetime_cols_contour = contour_gdf.select_dtypes(include=['datetime64[ns]', 'datetime64[ns, UTC]']).columns
+#     for col in datetime_cols_contour:
+#         contour_gdf[col] = contour_gdf[col].astype(str)
+
+#     center_lat = gdf_filtered.geometry.y.mean()
+#     center_lon = gdf_filtered.geometry.x.mean()
+#     center = [center_lat, center_lon]
+
+#     bounds = contour_gdf.total_bounds
+#     buffer_degree = 0.05
+#     minx = bounds[0] - buffer_degree
+#     miny = bounds[1] - buffer_degree
+#     maxx = bounds[2] + buffer_degree
+#     maxy = bounds[3] + buffer_degree
+#     region = ee.Geometry.Rectangle([minx, miny, maxx, maxy])
+
+#     date_start = '2023-01-01'
+#     date_end = '2023-12-31'
+
+#     s2_collection = (ee.ImageCollection('COPERNICUS/S2_SR')
+#                      .filterDate(date_start, date_end)
+#                      .filterBounds(region)
+#                      .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 50)))
+
+#     collection_size = s2_collection.size().getInfo()
+#     if collection_size == 0:
+#         print("No images found in the collection after filtering.")
+#         return
+
+#     s2_image = s2_collection.median().clip(region)
+
+#     vis_params = {
+#         'bands': ['B4', 'B3', 'B2'],
+#         'min': 0,
+#         'max': 3000,
+#         'gamma': [0.95, 1.1, 1],
+#     }
+
+#     Map = geemap.Map(center=center, zoom=10)
+#     Map.addLayer(s2_image, vis_params, 'Sentinel-2 Image')
+#     Map.add_gdf(contour_gdf, layer_name='Kernel Density Contours')
+#     Map.add_gdf(gdf_filtered, layer_name='Animal Positions')
+
+#     try:
+#         Map.save(output_filename)
+#         print(f"Interactive map successfully saved to {output_filename}")
+#     except Exception as e:
+#         print(f"Failed to save the map: {e}")
+
+# def plot_kernel_density_no_basemap(contour_gdf, gdf, output_filename):
+#     try:
+#         fig, ax = plt.subplots(figsize=(10, 10))
+#         gdf.plot(ax=ax, markersize=5, alpha=0.5, label='Data Points', color='blue')
+#         contour_gdf.plot(ax=ax, column='density', cmap='viridis', alpha=0.7, legend=True, label='Density Contours')
+#         ax.set_title('Kernel Density without Basemap')
+#         ax.set_xlabel('Longitude')
+#         ax.set_ylabel('Latitude')
+#         plt.legend()
+#         plt.savefig(output_filename, dpi=300)
+#         plt.close()
+#     except Exception as e:
+#         print(f"Failed to create plot without basemap: {e}")
+#         raise
