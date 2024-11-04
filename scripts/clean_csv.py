@@ -15,3 +15,4 @@ if df is not None and not df.empty:
     df.to_csv(output_csv, index=False)
 else:
     print(f"Failed to process {input_csv}")
+    
